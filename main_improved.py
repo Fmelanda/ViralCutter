@@ -98,11 +98,24 @@ def interactive_input_int(prompt_text):
         except ValueError:
             print(i18n("\nError: The value you entered is not an integer. Please try again."))
 
+def interactive_input_segments(prompt_text):
+    while True:
+        value = input(i18n(prompt_text)).strip()
+        if not value or value.lower() == "auto":
+            return "auto"
+        try:
+            parsed = int(value)
+            if parsed > 0:
+                return parsed
+        except ValueError:
+            pass
+        print(i18n("\nError: Enter a positive integer or 'auto'."))
+
 def main():
     # Configuração de Argumentos via Linha de Comando (CLI)
     parser = argparse.ArgumentParser(description="ViralCutter CLI")
     parser.add_argument("--url", help="YouTube Video URL")
-    parser.add_argument("--segments", type=int, help="Number of segments to create")
+    parser.add_argument("--segments", help="Number of segments to create, or 'auto'")
     parser.add_argument("--viral", action="store_true", help="Enable viral mode")
     parser.add_argument("--themes", help="Comma-separated themes (if not viral mode)")
     parser.add_argument("--burn-only", action="store_true", help="Skip processing and only burn subtitles")
@@ -250,12 +263,26 @@ def main():
     
     if not viral_segments:
         num_segments = args.segments
+        if isinstance(num_segments, str):
+            normalized_segments = num_segments.strip().lower()
+            if not normalized_segments or normalized_segments == "auto":
+                num_segments = "auto"
+            else:
+                try:
+                    parsed_segments = int(normalized_segments)
+                    if parsed_segments <= 0:
+                        raise ValueError
+                    num_segments = parsed_segments
+                except ValueError:
+                    print(i18n("Invalid segments value '{}'. Using 'auto'.").format(args.segments))
+                    num_segments = "auto"
+
         if not num_segments:
             if args.skip_prompts:
-                print(i18n("No segments count provided and skip-prompts is ON. Using default 3."))
-                num_segments = 3
+                print(i18n("No segments count provided and skip-prompts is ON. Using default 'auto'."))
+                num_segments = "auto"
             else:
-                num_segments = interactive_input_int("Enter the number of viral segments to create: ")
+                num_segments = interactive_input_segments("Enter the number of viral segments to create (or 'auto'): ")
 
         viral_mode = args.viral
         if not args.viral and not args.themes:

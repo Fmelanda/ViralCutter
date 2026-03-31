@@ -35,7 +35,7 @@ FACE_PRESETS = {
 }
 
 EXPERIMENTAL_PRESETS = {
-    "Default (Off)": {"focus": True, "mar": 0.03, "score": 1.5, "motion": True, "motion_th": 3.0, "motion_sens": 0.05, "decay": 2.0},
+    "Default (Off)": {"focus": False, "mar": 0.03, "score": 1.5, "motion": True, "motion_th": 3.0, "motion_sens": 0.05, "decay": 2.0},
     "Active Speaker (Balanced)": {"focus": True, "mar": 0.03, "score": 1.5, "motion": True, "motion_th": 3.0, "motion_sens": 0.05, "decay": 2.0},
     "Active Speaker (Sensitive)": {"focus": True, "mar": 0.02, "score": 1.0, "motion": True, "motion_th": 2.0, "motion_sens": 0.10, "decay": 1.0},
     "Active Speaker (Stable)": {"focus": True, "mar": 0.05, "score": 2.5, "motion": False, "motion_th": 5.0, "motion_sens": 0.02, "decay": 3.0},
@@ -233,7 +233,10 @@ def run_viral_cutter(input_source, project_name, url, video_file, segments, vira
             cmd.extend(["--translate-target", translate_target])
 
     
-    cmd.extend(["--segments", str(int(segments))])
+    segments_value = str(segments).strip() if segments is not None else ""
+    if not segments_value:
+        segments_value = "auto"
+    cmd.extend(["--segments", segments_value])
     if viral: cmd.append("--viral")
     if themes: cmd.extend(["--themes", themes])
     cmd.extend(["--min-duration", str(int(min_duration))])
@@ -419,7 +422,7 @@ with gr.Blocks(title=i18n("ViralCutter WebUI"), theme=gr.themes.Default(primary_
                     
                     
                     with gr.Row():
-                        segments_input = gr.Number(label=i18n("Segments"), value=3, precision=0)
+                        segments_input = gr.Textbox(label=i18n("Segments (number or auto)"), value="auto")
                         viral_input = gr.Checkbox(label=i18n("Viral Mode"), value=True)
                     themes_input = gr.Textbox(label=i18n("Themes"), placeholder=i18n("funny, sad..."), visible=False)
                     viral_input.change(lambda x: gr.update(visible=not x), viral_input, themes_input)
@@ -511,8 +514,8 @@ with gr.Blocks(title=i18n("ViralCutter WebUI"), theme=gr.themes.Default(primary_
                  face_preset_input.change(apply_face_preset, inputs=face_preset_input, outputs=[face_filter_thresh_input, face_two_thresh_input, face_conf_thresh_input, face_dead_zone_input])
 
                  with gr.Accordion(i18n("Experimental: Active Speaker & Motion"), open=False):
-                        experimental_preset_input = gr.Dropdown(choices=[(i18n(k), k) for k in EXPERIMENTAL_PRESETS.keys()], label=i18n("Configuration Presets"), value="Default (Off)", interactive=True)
-                        focus_active_speaker_input = gr.Checkbox(label=i18n("Experimental: Focus on Speaker"), value=False, info=i18n("Tries to focus only on the speaking person instead of split screen."))
+                        experimental_preset_input = gr.Dropdown(choices=[(i18n(k), k) for k in EXPERIMENTAL_PRESETS.keys()], label=i18n("Configuration Presets"), value="Active Speaker (Balanced)", interactive=True)
+                        focus_active_speaker_input = gr.Checkbox(label=i18n("Experimental: Focus on Speaker"), value=True, info=i18n("Tries to focus only on the speaking person instead of split screen."))
                         with gr.Row():
                             active_speaker_mar_input = gr.Slider(label=i18n("MAR Threshold (Mouth Open)"), minimum=0.01, maximum=0.20, value=0.03, step=0.005, info=i18n("Mouth open sensitivity."))
                             active_speaker_score_diff_input = gr.Slider(label=i18n("Score Difference"), minimum=0.5, maximum=10.0, value=1.5, step=0.5, info=i18n("Minimum difference to focus on 1 face."))

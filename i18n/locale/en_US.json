@@ -4,6 +4,7 @@
     "Subtitle burning completed.": "Subtitle burning completed.",
     "Enter the YouTube video URL (or press Enter to use latest project): ": "Enter the YouTube video URL (or press Enter to use latest project): ",
     "Enter the number of viral segments to create: ": "Enter the number of viral segments to create: ",
+    "Enter the number of viral segments to create (or 'auto'): ": "Enter the number of viral segments to create (or 'auto'): ",
     "\nError: Number must be greater than 0.": "\nError: Number must be greater than 0.",
     "Error: The value you entered is not an integer. Please try again.": "Error: The value you entered is not an integer. Please try again.",
     "Do you want viral mode? (yes/no): ": "Do you want viral mode? (yes/no): ",
