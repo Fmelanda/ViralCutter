@@ -98,24 +98,11 @@ def interactive_input_int(prompt_text):
         except ValueError:
             print(i18n("\nError: The value you entered is not an integer. Please try again."))
 
-def interactive_input_segments(prompt_text):
-    while True:
-        value = input(i18n(prompt_text)).strip()
-        if not value or value.lower() == "auto":
-            return "auto"
-        try:
-            parsed = int(value)
-            if parsed > 0:
-                return parsed
-        except ValueError:
-            pass
-        print(i18n("\nError: Enter a positive integer or 'auto'."))
-
 def main():
     # Configuração de Argumentos via Linha de Comando (CLI)
     parser = argparse.ArgumentParser(description="ViralCutter CLI")
     parser.add_argument("--url", help="YouTube Video URL")
-    parser.add_argument("--segments", help="Number of segments to create, or 'auto'")
+    parser.add_argument("--segments", type=int, help="Number of segments to create")
     parser.add_argument("--viral", action="store_true", help="Enable viral mode")
     parser.add_argument("--themes", help="Comma-separated themes (if not viral mode)")
     parser.add_argument("--burn-only", action="store_true", help="Skip processing and only burn subtitles")
@@ -134,7 +121,7 @@ def main():
     parser.add_argument("--face-model", choices=["yolo", "insightface", "mediapipe"], default="insightface", help="Face detection model: 'yolo' (Smooth Zoom), 'insightface' (default), 'mediapipe'")
     parser.add_argument("--face-mode", choices=["auto", "1", "2"], default="auto", help="Face tracking mode: auto, 1, 2")
     parser.add_argument("--subtitle-config", help="Path to subtitle configuration JSON file")
-    parser.add_argument("--no-face-mode", choices=["padding", "zoom", "blur"], default="padding", help="Method to handle segments with no face detected: 'padding' (9:16 frame with black bars), 'zoom' (Center Crop Zoom), or 'blur' (Blur Background - original centered with blurred fill)")
+    parser.add_argument("--no-face-mode", choices=["padding", "zoom"], default="padding", help="Method to handle segments with no face detected: 'padding' (9:16 frame with black bars) or 'zoom' (Center Crop Zoom)")
     parser.add_argument("--face-detect-interval", type=str, default="0.17,1.0", help="Face detection interval in seconds. Single value or 'interval_1face,interval_2face'")
     parser.add_argument("--face-filter-threshold", type=float, default=0.35, help="Relative area threshold to ignore background faces (default: 0.35)")
     parser.add_argument("--face-two-threshold", type=float, default=0.60, help="Relative area threshold to trigger 2-face mode (default: 0.60)")
@@ -149,7 +136,7 @@ def main():
     parser.add_argument("--active-speaker-motion-sensitivity", type=float, default=0.05, help="Motion sensitivity multiplier (default: 0.05)")
     parser.add_argument("--active-speaker-decay", type=float, default=2.0, help="Activity score decay rate (default: 2.0)")
     parser.add_argument("--skip-prompts", action="store_true", help="Skip interactive prompts and use defaults/existing files")
-    parser.add_argument("--video-quality", choices=["best", "4k", "1440p", "1080p", "720p", "480p"], default="best", help="Video download quality")
+    parser.add_argument("--video-quality", choices=["best", "1080p", "720p", "480p"], default="best", help="Video download quality")
     parser.add_argument("--skip-youtube-subs", action="store_true", help="Skip downloading YouTube subtitles")
     parser.add_argument("--translate-target", help="Target language code for subtitle translation (e.g. 'pt', 'en').")
 
@@ -263,26 +250,12 @@ def main():
     
     if not viral_segments:
         num_segments = args.segments
-        if isinstance(num_segments, str):
-            normalized_segments = num_segments.strip().lower()
-            if not normalized_segments or normalized_segments == "auto":
-                num_segments = "auto"
-            else:
-                try:
-                    parsed_segments = int(normalized_segments)
-                    if parsed_segments <= 0:
-                        raise ValueError
-                    num_segments = parsed_segments
-                except ValueError:
-                    print(i18n("Invalid segments value '{}'. Using 'auto'.").format(args.segments))
-                    num_segments = "auto"
-
         if not num_segments:
             if args.skip_prompts:
-                print(i18n("No segments count provided and skip-prompts is ON. Using default 'auto'."))
-                num_segments = "auto"
+                print(i18n("No segments count provided and skip-prompts is ON. Using default 3."))
+                num_segments = 3
             else:
-                num_segments = interactive_input_segments("Enter the number of viral segments to create (or 'auto'): ")
+                num_segments = interactive_input_int("Enter the number of viral segments to create: ")
 
         viral_mode = args.viral
         if not args.viral and not args.themes:

@@ -140,74 +140,47 @@ def get_best_encoder():
     return ("libx264", "ultrafast")
 
 
-# Import quality enhancement functions
-try:
-    from scripts.video_quality import enhance_frame
-    QUALITY_AVAILABLE = True
-except ImportError:
-    QUALITY_AVAILABLE = False
-
-
 def crop_to_vertical(frame, center_x, center_y, frame_width, frame_height, zoom=1.0):
     """
-    Crop frame to vertical format centered on (center_x, center_y).
-    Uses wider crop + blur background for landscape sources (less zoom, better quality).
+    Crop frame to 9:16 aspect ratio centered on (center_x, center_y) with progressive zoom.
+    
+    Args:
+        frame: Input frame
+        center_x, center_y: Center point to focus on
+        frame_width, frame_height: Original frame dimensions
+        zoom: Zoom factor (1.0 = no zoom, 1.4 = 40% closer)
     """
-    target_w, target_h = 1080, 1920
-    target_ar = target_w / target_h  # 0.5625
+    target_aspect = 9 / 16
     
-    # Calculate tight 9:16 crop
-    tight_w = int(frame_height * target_ar)
-    if tight_w > frame_width:
-        tight_w = frame_width
-    
-    # Wider crop: show ~42% of source width (less zoom, more context)
-    wide_w = int(frame_width * 0.42)
-    
-    # Pick wider option for less zoom
-    source_w = min(max(tight_w, wide_w), frame_width)
-    source_h = frame_height
-    
-    # Center on face horizontally
-    crop_x = int(center_x - source_w // 2)
-    crop_x = max(0, min(crop_x, frame_width - source_w))
-    
-    cropped = frame[0:source_h, crop_x:crop_x + source_w]
-    
-    crop_ar = source_w / source_h
-    
-    if abs(crop_ar - target_ar) < 0.03:
-        # Already ~9:16 → direct resize
-        resized = cv2.resize(cropped, (target_w, target_h), interpolation=cv2.INTER_LANCZOS4)
+    # Calculate base crop dimensions
+    if frame_width / frame_height > target_aspect:
+        base_crop_width = int(frame_height * target_aspect)
+        base_crop_height = frame_height
     else:
-        # Wider → compose with blur background
-        bg_crop_w = min(int(frame_height * target_ar), frame_width)
-        bg_x = (frame_width - bg_crop_w) // 2
-        bg_slice = frame[0:frame_height, bg_x:bg_x + bg_crop_w]
-        bg_small = cv2.resize(bg_slice, (target_w // 2, target_h // 2), interpolation=cv2.INTER_AREA)
-        bg_small = cv2.GaussianBlur(bg_small, (51, 51), 0)
-        resized = cv2.resize(bg_small, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
-        
-        scale = target_w / source_w
-        fg_w = target_w
-        fg_h = int(source_h * scale)
-        
-        if fg_h > target_h:
-            fg_h = target_h
-            fg_w = int(source_w * (target_h / source_h))
-        
-        foreground = cv2.resize(cropped, (fg_w, fg_h), interpolation=cv2.INTER_LANCZOS4)
-        
-        pad_top = (target_h - fg_h) // 2
-        pad_left = (target_w - fg_w) // 2
-        resized[pad_top:pad_top + fg_h, pad_left:pad_left + fg_w] = foreground
+        base_crop_width = frame_width
+        base_crop_height = int(frame_width / target_aspect)
     
-    # Apply full enhancement pipeline: Denoise -> Color Grading -> Unsharp
-    if QUALITY_AVAILABLE:
-        return enhance_frame(resized, preset_name="high")
-    else:
-        gaussian = cv2.GaussianBlur(resized, (0, 0), 3.0)
-        return cv2.addWeighted(resized, 1.8, gaussian, -0.8, 0)
+    # Apply zoom - smaller crop = more zoomed in
+    crop_width = int(base_crop_width / zoom)
+    crop_height = int(base_crop_height / zoom)
+    
+    # Ensure minimum crop size (avoid too much zoom)
+    min_crop_width = int(base_crop_width / 2.0)  # Max 2x zoom
+    min_crop_height = int(base_crop_height / 2.0)
+    crop_width = max(crop_width, min_crop_width)
+    crop_height = max(crop_height, min_crop_height)
+    
+    # Calculate crop position (centered on face)
+    crop_x = int(center_x - crop_width // 2)
+    crop_y = int(center_y - crop_height // 2)
+    
+    # Clamp to frame bounds
+    crop_x = max(0, min(crop_x, frame_width - crop_width))
+    crop_y = max(0, min(crop_y, frame_height - crop_height))
+    
+    # Extract and resize
+    crop = frame[crop_y:crop_y+crop_height, crop_x:crop_x+crop_width]
+    return cv2.resize(crop, (1080, 1920), interpolation=cv2.INTER_AREA)
 
 
 def generate_short_yolo(input_file, output_file, index, project_folder, final_folder,
@@ -295,11 +268,10 @@ def generate_short_yolo(input_file, output_file, index, project_folder, final_fo
         smoothed, current_zoom = smoother.update(best_bbox)
         
         if smoothed is not None:
-            # Calculate face center — offset Y to head/shoulders for "talking head" framing
+            # Calculate face center
             x1, y1, x2, y2 = smoothed
             center_x = (x1 + x2) / 2
-            # Offset: 30% from top of bbox = head/shoulders area (not torso center)
-            center_y = y1 + (y2 - y1) * 0.30
+            center_y = (y1 + y2) / 2
             
             # Crop and resize with progressive zoom
             result = crop_to_vertical(frame, center_x, center_y, 
@@ -310,10 +282,6 @@ def generate_short_yolo(input_file, output_file, index, project_folder, final_fo
                 # Center crop with current zoom level
                 result = crop_to_vertical(frame, frame_width/2, frame_height/2,
                                          frame_width, frame_height, zoom=current_zoom)
-            elif no_face_mode == "blur":
-                # Blur Background (import from one_face)
-                from scripts.one_face import resize_with_blur_background
-                result = resize_with_blur_background(frame)
             else:
                 # Padding (import from one_face)
                 from scripts.one_face import resize_with_padding
@@ -355,11 +323,8 @@ def _finalize_video(input_file, output_file, index, fps, project_folder, final_f
             "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-stats",
             "-i", output_file,
             "-i", audio_file,
-            "-c:v", encoder_name, "-preset", encoder_preset,
-            "-crf", "18",  # Visually lossless quality
-            "-b:v", "25M",  # 4K quality bitrate
+            "-c:v", encoder_name, "-preset", encoder_preset, "-b:v", "5M",
             "-c:a", "aac", "-b:a", "192k",
-            "-pix_fmt", "yuv420p",  # YouTube/TikTok compatibility
             "-r", str(fps),
             final_output
         ]

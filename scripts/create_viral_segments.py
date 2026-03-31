@@ -181,7 +181,7 @@ def preprocess_transcript_for_ai(segments):
     
     # Try to start with (0s) based on first segment
     first_start = segments[0].get('start', 0)
-    full_text += f"({first_start:.2f}s) "
+    full_text += f"({int(first_start)}s) "
     last_tag_time = first_start
 
     for seg in segments:
@@ -190,8 +190,9 @@ def preprocess_transcript_for_ai(segments):
         
         full_text += text + " "
         
-        full_text += f"({int(end_time)}s) "
-        last_tag_time = end_time
+        if end_time - last_tag_time >= 4:
+            full_text += f"({int(end_time)}s) "
+            last_tag_time = end_time
 
     return full_text.strip()
 
@@ -498,25 +499,7 @@ def process_segments(raw_segments, transcript_segments, min_duration, max_durati
 
 
 def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode="manual", api_key=None, project_folder="tmp", chunk_size_arg=None, model_name_arg=None):
-    auto_segment_count = False
-    quantidade_de_virals = None
-
-    if isinstance(num_segments, str):
-        normalized_segments = num_segments.strip().lower()
-        auto_segment_count = (not normalized_segments) or (normalized_segments == "auto")
-        if not auto_segment_count:
-            try:
-                quantidade_de_virals = int(normalized_segments)
-            except ValueError:
-                auto_segment_count = True
-    elif isinstance(num_segments, int):
-        quantidade_de_virals = num_segments if num_segments > 0 else None
-        auto_segment_count = quantidade_de_virals is None
-    else:
-        auto_segment_count = True
-
-    if auto_segment_count:
-        quantidade_de_virals = None
+    quantidade_de_virals = num_segments
 
     # 1. Load Transcript
     transcript_segments = load_transcript(project_folder)
@@ -582,7 +565,7 @@ def create(num_segments, viral_mode, themes, tempo_minimo, tempo_maximo, ai_mode
         print("Aviso: prompt.txt não encontrado. Usando prompt interno.")
         system_prompt_template = """You are a World-Class Viral Video Editor.
 {context_instruction}
-Analyze the transcript below with time tags (XXs). {amount_instruction}
+Analyze the transcript below with time tags (XXs). Find {amount} viral segments.
 Constraints: Each segment MUST be between {min_duration} seconds and {max_duration} seconds.
 IMPORTANT: Output "Title", "Hook", and "Reasoning" in the SAME LANGUAGE as the transcript (e.g., if transcript is Portuguese, output Portuguese).
 TRANSCRIPT:
@@ -634,21 +617,10 @@ OUTPUT JSON ONLY:
         else:
             start = next_start
 
-    if auto_segment_count:
-        amount_instruction = "Find all high-potential viral segments that are strong enough to stand on their own. Do not force extra segments just to hit a quota."
-    else:
-        amount_instruction = f"Find {quantidade_de_virals} potential viral segments."
-
     if viral_mode:
-        if auto_segment_count:
-            virality_instruction = "analyze the segment for potential virality and identify every high-potential viral segment from the transcript without forcing a fixed quantity"
-        else:
-            virality_instruction = f"analyze the segment for potential virality and identify {quantidade_de_virals} most viral segments from the transcript"
+        virality_instruction = f"""analyze the segment for potential virality and identify {quantidade_de_virals} most viral segments from the transcript"""
     else:
-        if auto_segment_count:
-            virality_instruction = f"analyze the segment for potential virality and identify every strong segment based on the list of themes {themes}, without forcing a fixed quantity."
-        else:
-            virality_instruction = f"analyze the segment for potential virality and identify {quantidade_de_virals} the best parts based on the list of themes {themes}."
+        virality_instruction = f"""analyze the segment for potential virality and identify {quantidade_de_virals} the best parts based on the list of themes {themes}."""
 
     output_texts = []
     for i, chunk in enumerate(chunks):
@@ -660,23 +632,21 @@ OUTPUT JSON ONLY:
             prompt = system_prompt_template.format(
                 context_instruction=context_instruction,
                 virality_instruction=virality_instruction,
-                amount_instruction=amount_instruction,
                 min_duration=tempo_minimo,
                 max_duration=tempo_maximo,
                 transcript_chunk=chunk,
                 json_template=json_template,
-                amount=quantidade_de_virals if quantidade_de_virals is not None else "auto"
+                amount=quantidade_de_virals
             )
         except KeyError as e:
             prompt = system_prompt_template
             prompt = prompt.replace("{context_instruction}", context_instruction)
             prompt = prompt.replace("{virality_instruction}", virality_instruction)
-            prompt = prompt.replace("{amount_instruction}", amount_instruction)
             prompt = prompt.replace("{min_duration}", str(tempo_minimo))
             prompt = prompt.replace("{max_duration}", str(tempo_maximo))
             prompt = prompt.replace("{transcript_chunk}", chunk)
             prompt = prompt.replace("{json_template}", json_template)
-            prompt = prompt.replace("{amount}", str(quantidade_de_virals if quantidade_de_virals is not None else "auto"))
+            prompt = prompt.replace("{amount}", str(quantidade_de_virals))
 
         output_texts.append(prompt)
 
@@ -685,12 +655,11 @@ OUTPUT JSON ONLY:
         full_prompt = system_prompt_template
         full_prompt = full_prompt.replace("{context_instruction}", "Full Video Transcript Analysis")
         full_prompt = full_prompt.replace("{virality_instruction}", virality_instruction)
-        full_prompt = full_prompt.replace("{amount_instruction}", amount_instruction)
         full_prompt = full_prompt.replace("{min_duration}", str(tempo_minimo))
         full_prompt = full_prompt.replace("{max_duration}", str(tempo_maximo))
         full_prompt = full_prompt.replace("{transcript_chunk}", content) 
         full_prompt = full_prompt.replace("{json_template}", json_template)
-        full_prompt = full_prompt.replace("{amount}", str(quantidade_de_virals if quantidade_de_virals is not None else "auto"))
+        full_prompt = full_prompt.replace("{amount}", str(quantidade_de_virals))
         
         with open(full_prompt_path, "w", encoding="utf-8") as f:
             f.write(full_prompt)

@@ -5,43 +5,6 @@ import sys
 from i18n.i18n import I18nAuto
 i18n = I18nAuto()
 
-def _get_cookie_opts():
-    """
-    Detecta automaticamente a melhor forma de passar cookies para o yt-dlp.
-    
-    Prioridade:
-      1. Arquivo cookies.txt (ideal para Kaggle/Colab/Docker)
-         - Procura em: ./cookies.txt, ../cookies.txt, /kaggle/working/cookies.txt
-      2. Cookies do navegador Chrome (ideal para uso local no Windows/Mac/Linux)
-      3. Nenhum cookie (fallback final)
-    """
-    # Locais comuns para cookies.txt
-    cookie_search_paths = [
-        os.path.join(os.getcwd(), 'cookies.txt'),
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'cookies.txt'),
-        '/kaggle/working/cookies.txt',
-        '/content/cookies.txt',  # Google Colab
-    ]
-    
-    for cookie_path in cookie_search_paths:
-        if os.path.exists(cookie_path) and os.path.getsize(cookie_path) > 0:
-            print(f"🍪 Usando cookies de arquivo: {cookie_path}")
-            return {'cookiefile': cookie_path}
-    
-    # Fallback: tentar cookies do navegador (só funciona em ambiente local)
-    try:
-        # Teste rápido para ver se o Chrome está acessível
-        import sqlite3
-        return {'cookiesfrombrowser': ('chrome',)}
-    except Exception:
-        pass
-    
-    print("⚠️ Nenhum cookie encontrado. Downloads podem falhar com 'Sign in to confirm you're not a bot'.")
-    print("   → Para Kaggle/Colab: faça upload de um arquivo cookies.txt na raiz do projeto.")
-    print("   → Para uso local: certifique-se de ter o Chrome instalado.")
-    return {}
-
-
 def sanitize_filename(name):
     """Remove caracteres inválidos e emojis para evitar erro de encoding no Windows."""
     # Remove caracteres reservados do sistema de arquivos
@@ -69,18 +32,19 @@ def progress_hook(d):
         print(f"[download] Download concluído: {d['filename']}", flush=True)
 
 def download(url, base_root="VIRALS", download_subs=True, quality="best"):
-    # Detectar cookies automaticamente (cookies.txt para Kaggle/Colab, Chrome para local)
-    cookie_opts = _get_cookie_opts()
-    
+    # 1. Extrair informações do vídeo para pegar o título
     # 1. Extrair informações do vídeo para pegar o título
     print(i18n("Extracting video information..."))
     title = None
     
+    # ... (Keep existing title extraction logic) ...
+    # Instead of repeating it effectively, I will rely on the diff to keep it or re-write it if I have to replace the whole block.
+    # Since replace_file_content works on line ranges, I should be careful.
+    # Let's assume I'm replacing the whole function body or significant parts.
+    
     # Tentativa 1: Com cookies
     try:
-        info_opts = {'quiet': True, 'no_warnings': True}
-        info_opts.update(cookie_opts)
-        with yt_dlp.YoutubeDL(info_opts) as ydl:
+        with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True, 'cookiesfrombrowser': ('chrome',)}) as ydl:
             info = ydl.extract_info(url, download=False)
             title = info.get('title')
     except Exception as e:
@@ -150,8 +114,6 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best"):
     # Mapeamento de Qualidade
     quality_map = {
         "best": 'bestvideo+bestaudio/best',
-        "4k": 'bestvideo[height<=2160]+bestaudio/best',
-        "1440p": 'bestvideo[height<=1440]+bestaudio/best',
         "1080p": 'bestvideo[height<=1080]+bestaudio/best[height<=1080]',
         "720p": 'bestvideo[height<=720]+bestaudio/best[height<=720]',
         "480p": 'bestvideo[height<=480]+bestaudio/best[height<=480]'
@@ -181,8 +143,7 @@ def download(url, base_root="VIRALS", download_subs=True, quality="best"):
         'force_ipv4': True,
     }
     
-    # Injetar configuração de cookies detectada automaticamente
-    ydl_opts.update(cookie_opts)
+
     
     if download_subs:
         ydl_opts['postprocessors'] = [{
